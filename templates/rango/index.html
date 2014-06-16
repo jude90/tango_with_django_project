@@ -12,8 +12,34 @@
 
     <body>
         <h1>Rango says...</h1>
-        hello world! <strong>{{ boldmessage }}</strong><br />
-        <a href="/rango/about/">About</a><br />
-        <img src="{% static "rango.jpg" %}" alt="Picture of Rango" /> <!-- New line -->
+        <a href="/rango/register/">Register Here</a>
+
+        hello world! <strong>{{ boldmessage }}</strong><br/>
+        {% if categories %}
+            <ul>
+                {% for category in categories %}
+                    <li><a href="/rango/category/{{category.url}}"> {{category.name}}</a> </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <strong>There are no categories present.</strong>
+        {% endif%}
+        {% if pages %}
+            <ul>
+                {% for page in pages %}
+                    <li><a href="{{page.url}}">{{page.title}}</a></li>
+                {% endfor %}
+        {% else %}
+            <strong>There asre no pages here</strong>
+        {% endif %}
+        <div> 
+         <p> 
+        
+        <a href="/rango/add_category/">Add a New Category</a>
+        
+        </p>
+        <p><a href="/rango/about/">About Rango</a></p> 
+        </div>
+        <img src="{% static "rango_hero.jpg" %}" alt="Picture of Rango" /> <!-- New line -->
     </body>
 </html>
