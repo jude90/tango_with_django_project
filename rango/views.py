@@ -1,45 +1,79 @@
 from django.shortcuts import render_to_response
-
+from datetime import datetime
 # Create your views here.
+
 from django.http import HttpResponse
 from django.template import RequestContext
 from rango.models import Category, Page
 from rango.forms import CategoryForm, PageForm
 
 from rango.forms import UserForm, UserProfileForm
+from django.contrib.auth import authenticate, login, logout
+from django.http import HttpResponseRedirect
+from django.contrib.auth.decorators import login_required
 def decode_url(name_url):
     if name_url.find(' '):
         return name_url.replace(' ','_')
     elif name_url.find('_'):
         return name_url.replace('_',' ')
 def index(request):
-    
+    request.session.set_test_cookie()
     context       = RequestContext(request)
-    category_list = Category.objects.order_by('-likes')[:5]
+    category_list = get_category_list()
     page_list     = Page.objects.order_by('-views')[:5]
     context_dict  = {'categories':category_list,
                      'pages':page_list}
 
     #print category_list
-    for category in category_list:
-        category.url = category.name.replace(' ','_')
+    #for category in category_list:
+    #    category.url = category.name.replace(' ','_')
         #category.url = decode_url(category.name)
+
+    #### NEW CODE ####
+    # Obtain our Response object early so we can add cookie information.
+    #response = render_to_response('rango/index.html', context_dict, context)
+
+    
 
     return render_to_response('rango/index.html', context_dict, context)
 
 def about(request):
     context = RequestContext(request)
     context_dict = {'name':"ASka dfhf"}
-    return render_to_response('rango/about.html',context_dict)
+    #add categories to sidebar
+    category_list = get_category_list()
+    context['categories'] = category_list
+
+    response = render_to_response('rango/about.html', context_dict, context)
+
+    if 'last_visit' in request.COOKIES:
+        # Yes it does! Get the cookie's value.
+        last_visit = request.COKIES['last_visit']
+        # Cast the value to a Python date/time object.
+        last_visit_time = datetime.strptime(last_visit[:-7], "%Y-%m-%d %H:%M:%S")
+
+        # If it's been more than a day since the last visit...
+        if (datetime.now() - last_visit_time).days > 0:
+            # ...reassign the value of the cookie to +1 of what it was before...
+            response.set_cookie('visits', visits+1)
+            # ...and update the last visit cookie, too.
+            response.set_cookie('last_visit', datetime.now())
+    else:
+        # Cookie last_visit doesn't exist, so create it to the current date/time.
+        response.set_cookie('last_visit', datetime.now())
+
+    return response
 
 def category(request, category_name_url):
     context = RequestContext(request)
+    category_list = get_category_list()
     #decode parameter from url
     category_name = category_name_url.replace('_',' ')
     #category_name = decode_url(category_name_url)
     
     context_dict = {'category_name':category_name}
     context_dict['category_name_url'] = category_name_url
+    context_dict['categories'] = category_list
     try:
         category = Category.objects.get(name=category_name)
 
@@ -104,6 +138,10 @@ def add_page(request,category_name_url):
 
 
 def register(request):
+    request.session.set_test_cookie()
+    if request.session.test_cookie_worked():
+        print ">>> TEST COOKIE WORKED"
+        request.session.delete_test_cookie()
     context = RequestContext(request)
 
     registered = False
@@ -170,5 +208,23 @@ def user_login(request):
     else:
         # The request is not a HTTP POST, so display the login form.
         # This scenario would most likely be a HTTP GET.
-        return render_to_response('/rango/login.html',{},context)
+        return render_to_response('rango/login.html',{},context)
 
+
+
+@login_required
+def restricted(request):
+    return HttpResponse("Since you're logged in, you can see this text!")
+
+@login_required
+def user_logout(request):
+    logout(request)
+
+    return HttpResponseRedirect('/rango/')
+
+def get_category_list():
+    category_list = Category.objects.all()
+    for category in category_list:
+        category.url = category.name.replace(' ','_')
+
+    return category_list

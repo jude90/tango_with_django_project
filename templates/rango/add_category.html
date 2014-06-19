@@ -1,12 +1,10 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>Rango</title>
-    </head>
-
-    <body>
+{% extends 'rango/base.html'%}
+{% load static %}
+{% block body_block %}
+<div class="hero-unit"> 
         <h1>Add a Category</h1>
-
+        <br/>
+        <div class="container">
         <form id="category_form" method="post" action="/rango/add_category/">
 
             {% csrf_token %}
@@ -20,8 +18,8 @@
                 {{ field }}
             {% endfor %}
 
-            <input type="submit" name="submit" value="Create Category" />
+            <button class="btn btn-primary" type="submit" name="submit" >Create Category </button>
         </form>
-    </body>
-
-</html>
+    </div>
+</div>
+{% endblock %}
