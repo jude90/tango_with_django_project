@@ -4,13 +4,23 @@ from datetime import datetime
 
 from django.http import HttpResponse
 from django.template import RequestContext
-from rango.models import Category, Page
+from rango.models import Category, Page, UserProfile
 from rango.forms import CategoryForm, PageForm
 
 from rango.forms import UserForm, UserProfileForm
 from django.contrib.auth import authenticate, login, logout
 from django.http import HttpResponseRedirect
 from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect
+####
+#Global utility
+def get_category_list():
+    category_list = Category.objects.all()
+    for category in category_list:
+        category.url = category.name.replace(' ','_')
+
+    return category_list
+####
 def decode_url(name_url):
     if name_url.find(' '):
         return name_url.replace(' ','_')
@@ -19,7 +29,9 @@ def decode_url(name_url):
 def index(request):
     request.session.set_test_cookie()
     context       = RequestContext(request)
+
     category_list = get_category_list()
+
     page_list     = Page.objects.order_by('-views')[:5]
     context_dict  = {'categories':category_list,
                      'pages':page_list}
@@ -41,14 +53,16 @@ def about(request):
     context = RequestContext(request)
     context_dict = {'name':"ASka dfhf"}
     #add categories to sidebar
+    
     category_list = get_category_list()
+
     context['categories'] = category_list
 
     response = render_to_response('rango/about.html', context_dict, context)
 
     if 'last_visit' in request.COOKIES:
         # Yes it does! Get the cookie's value.
-        last_visit = request.COKIES['last_visit']
+        last_visit = request.COOKIES['last_visit']
         # Cast the value to a Python date/time object.
         last_visit_time = datetime.strptime(last_visit[:-7], "%Y-%m-%d %H:%M:%S")
 
@@ -66,33 +80,45 @@ def about(request):
 
 def category(request, category_name_url):
     context = RequestContext(request)
-    category_list = get_category_list()
+    
     #decode parameter from url
     category_name = category_name_url.replace('_',' ')
-    #category_name = decode_url(category_name_url)
-    
-    context_dict = {'category_name':category_name}
-    context_dict['category_name_url'] = category_name_url
-    context_dict['categories'] = category_list
+    category_list = get_category_list()
+    context_dict = {'category_name':category_name,'categories':category_list}
     try:
         category = Category.objects.get(name=category_name)
-
-        pages = Page.objects.filter(category=category)
+        pages    = Page.objects.filter(category=category)
         
         # ORM objects
         context_dict['pages'] = pages
         context_dict['category'] = category
-
-
     except Category.DoesNotExist:
         # We get here if we didn't find the specified category.
         # Don't do anything - the template displays the "no category" message for us.
         pass
     return render_to_response('rango/category.html',context_dict,context)
 
+
+@login_required
+def like_category(request):
+    context = RequestContext(request)
+    cat_id = None
+    if request.method =='GET':
+        cat_id = request.GET['category_id']
+    likes = 0
+    if cat_id:
+        category = Category.objects.get(id=int(cat_id))
+        if category:
+            likes = category.likes + 1
+            category.likes = likes
+            category.save()
+    return HttpResponse(likes)
+
+
 def add_category(request):
     context = RequestContext(request)
 
+    category_list = get_category_list()
     if request.method == 'POST':
         form = CategoryForm(request.POST)
 
@@ -104,11 +130,11 @@ def add_category(request):
             print form.errors
     else:
         form = CategoryForm()
-    return render_to_response('rango/add_category.html',{'form':form},context)
+    return render_to_response('rango/add_category.html',{'form':form,'categories':category_list},context)
 
 def add_page(request,category_name_url):
     context = RequestContext(request)
-
+    category_list = get_category_list()
     category_name = category_name_url.replace('_',' ')
     if request.method =='POST':
         form = PageForm(request.POST)
@@ -120,7 +146,7 @@ def add_page(request,category_name_url):
                 cat = Category.objects.get(name=category_name)
                 page.category = cat
             except Category.DoesNotExist:
-                return render_to_response('/rango/add_category.html',{},context)
+                return render_to_response('/rango/add_category.html',{'categories':category_list},context)
 
             page.views = 0
             page.save()
@@ -133,6 +159,7 @@ def add_page(request,category_name_url):
     return render_to_response('rango/add_page.html',
                               {'category_name_url':category_name_url,
                               'category_name':category_name,
+                              'categories':category_list,
                               'form':form},
                               context)
 
@@ -143,6 +170,7 @@ def register(request):
         print ">>> TEST COOKIE WORKED"
         request.session.delete_test_cookie()
     context = RequestContext(request)
+    category_list = get_category_list()
 
     registered = False
     if request.method == 'POST':
@@ -181,11 +209,12 @@ def register(request):
         profile_form = UserProfileForm()
 
     return render_to_response('rango/register.html',
-                             {'user_form': user_form, 'profile_form': profile_form, 'registered': registered},
+                             {'user_form': user_form, 'profile_form': profile_form, 'registered': registered,'categories':category_list},
                               context)
 
 def user_login(request):
     context = RequestContext(request)
+    category_list = get_category_list()
 
     if request.method == 'POST':
         username = request.POST['username']
@@ -208,9 +237,22 @@ def user_login(request):
     else:
         # The request is not a HTTP POST, so display the login form.
         # This scenario would most likely be a HTTP GET.
-        return render_to_response('rango/login.html',{},context)
+        return render_to_response('rango/login.html',{'categories':category_list},context)
 
+@login_required
+def user_profile(request):
+    context = RequestContext(request)
+    category_list = get_category_list()
 
+    context_dict = {'categories':category_list}
+    try:
+        uprofile = UserProfile.objects.get(user=request.user)
+    except:
+        uprofile = None
+    context_dict['userprofile'] = uprofile
+
+ 
+    return render_to_response('rango/profile.html',context_dict,context)
 
 @login_required
 def restricted(request):
@@ -222,9 +264,18 @@ def user_logout(request):
 
     return HttpResponseRedirect('/rango/')
 
-def get_category_list():
-    category_list = Category.objects.all()
-    for category in category_list:
-        category.url = category.name.replace(' ','_')
-
-    return category_list
+def track_url(request):
+    context = RequestContext(request)
+    page_id = None
+    url = '/rango/'
+    if request.method == 'GET':
+        if 'page_id' in request.GET:
+            page_id = request.GET['page_id']
+            try:
+                page = Page.objects.get(id=page_id)
+                page.views = page.views + 1
+                page.save()
+                url = page.url
+            except :
+                pass
+    return redirect(url)
